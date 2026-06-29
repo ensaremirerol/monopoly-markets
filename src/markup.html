@@ -126,7 +126,7 @@
 
         <div style="margin-top:12px; padding:10px 12px; background:#161b22; border-radius:6px; border:1px solid #21262d;">
           <div style="font:11px/1.6 Inter,system-ui; color:#484f58;">
-            Dividends pay each round. Borrowed shares are collateral — if a loan tops <span style="color:#e3b341;">80%</span> of its value it is liquidated on advance. Click a row to trade it.
+            Dividends pay into P&amp;L each round. <span style="color:#e6edf3;">Borrow to buy</span> adds the cost to your loan — no cash changes hands now — and the shares secure it. If the loan rises above <span style="color:#e3b341;">80%</span> of those shares' value, they're sold on the next advance to repay it, and any shortfall comes from your tabletop cash. Click a row to trade it.
           </div>
         </div>
       </div>
@@ -137,7 +137,7 @@
 
         <!-- Liquidation banner -->
         <sc-if value="{{ apLiquidated }}" hint-placeholder-val="{{ false }}">
-          <div style="background:#2a1215; border:1px solid #f85149; border-radius:6px; padding:10px 14px; margin-bottom:14px; font:600 12px Inter,system-ui; color:#ff8a80;">⚠ MARGIN CALL — long positions were liquidated last round to repay the loan.</div>
+          <div style="background:#2a1215; border:1px solid #f85149; border-radius:6px; padding:10px 14px; margin-bottom:14px; font:600 12px Inter,system-ui; color:#ff8a80;">⚠ MARGIN CALL — long positions were sold last round to repay the loan; any shortfall came from this player's tabletop cash.</div>
         </sc-if>
 
         <!-- Account summary -->
@@ -314,10 +314,10 @@
         </div>
 
         <label style="display:flex; flex-direction:column; gap:5px; cursor:pointer;">
-          <div style="font:10px Inter,system-ui; color:#484f58; text-transform:uppercase; letter-spacing:0.5px;">Borrow</div>
+          <div style="font:10px Inter,system-ui; color:#484f58; text-transform:uppercase; letter-spacing:0.5px;">Borrow (buy only)</div>
           <div style="display:flex; align-items:center; gap:7px; height:34px;">
             <input type="checkbox" checked="{{ tradeMargin }}" onchange="{{ onToggleMargin }}" style="width:15px; height:15px; cursor:pointer; accent-color:#58a6ff;">
-            <span style="font:12px Inter,system-ui; color:#6e7681;">Buy on credit</span>
+            <span style="font:12px Inter,system-ui; color:#6e7681;">Pay later (loan)</span>
           </div>
         </label>
 

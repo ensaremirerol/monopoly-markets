@@ -276,7 +276,13 @@ class Component extends DCLogic {
     }));
 
     const toastBg = toast ? (toast.type === 'error' ? R : toast.type === 'success' ? G : B) : G;
-    const ratioPctStr = ms.collateral > 0 ? (ms.ratio * 100).toFixed(0) + '% of collateral' : 'no collateral';
+    const ratioPctStr = ms.collateral > 0 ? (ms.ratio * 100).toFixed(0) + '% of collateral · call at 80%' : 'no collateral';
+
+    // Tell the player exactly what to do with their tabletop cash for this order.
+    let estLabel;
+    if (tradeAction === 'buy' && tradeMargin) estLabel = 'Add to loan';     // borrowed — no cash now
+    else if (tradeAction === 'sell' || tradeAction === 'short') estLabel = 'Collect (cash)';
+    else estLabel = 'Pay (cash)';                                            // cash buy or cover
 
     return {
       isSetup: phase === 'setup',
@@ -310,7 +316,7 @@ class Component extends DCLogic {
       tradePlayerOptions: players.map((p, i) => ({ label: p.name, value: i })),
       tradeStockOptions: stocks.map(st => ({ label: `${st.id} — ${this.fmt(st.price)}`, value: st.id })),
       tradePlayerIdx, tradeStockId, tradeActions, tradeQty, tradeMargin,
-      estLabel: ['sell', 'short'].includes(tradeAction) ? 'Est. Proceeds' : 'Est. Cost',
+      estLabel,
       estTotal: qty > 0 ? this.fmt(estTotalNum) : '—',
       onTradePlayerChange: e => this.setState({ tradePlayerIdx: parseInt(e.target.value, 10) }),
       onTradeStockChange: e => this.setState({ tradeStockId: e.target.value }),
