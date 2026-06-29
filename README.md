@@ -105,6 +105,51 @@ rules there, not in the bundle.
 
 ---
 
+## Multiplayer (cloud, in progress)
+
+Players join one game from their own phones, watch the market live, and **queue
+orders that the host approves** before they hit the book. It uses a
+host-authoritative model on [PartyKit](https://www.partykit.io/) (Cloudflare
+Durable Objects): the server holds the only copy of the game state and runs the
+same `src/engine.js` rules; clients only *propose* orders.
+
+- `src/room.js` — the room reducer (join / queue / approve / reject / advance), pure and unit-tested
+- `party/server.js` — the PartyKit server: one Durable Object per room, wraps the room reducer, persists state, broadcasts to all clients
+- Concurrency is safe by construction: each room is single-threaded and the server is the only writer (see `party/server.js`)
+
+**Status:** authoritative server + room logic are done and tested; the client
+host/player views are the next step.
+
+### Setting it up
+
+Requires **Node 18+** (PartyKit's CLI needs it).
+
+```bash
+npm install                 # installs partykit (dev/deploy) + partysocket (client)
+npm run party:dev           # run the server locally at 127.0.0.1:1999
+# deploy to the cloud (one-time GitHub login, free tier):
+npx partykit login
+npm run party:deploy        # → https://monopoly-markets.<your-user>.partykit.dev
+```
+
+Point the client at that URL and players connect with a room code.
+
+---
+
+## Future Work
+
+- **Offline LAN multiplayer (no internet).** Same host-authoritative model, but
+  the host runs a small local `server.js` (Node + WebSocket) on one machine and
+  phones connect over the same Wi-Fi at `http://<host-ip>:<port>`. Keeps data
+  private and needs no third-party account; state is persisted to a JSON file on
+  the host so games survive restarts. Single-device pass-and-play still works by
+  just opening `index.html` with no server.
+- Round summary modal
+- More stocks / news events
+- Sound effects
+
+---
+
 ## License
 
 MIT — see `LICENSE` file. Free to use, modify, and distribute.
@@ -113,8 +158,4 @@ MIT — see `LICENSE` file. Free to use, modify, and distribute.
 
 ## Contributing
 
-Pull requests welcome! Ideas:
-- Queued/asynchronous multi-device trading
-- Round summary modal
-- More stocks / news events
-- Sound effects
+Pull requests welcome — see **Future Work** above for good starting points.
