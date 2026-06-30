@@ -181,7 +181,10 @@ class Component extends DCLogic {
     this.conn.send({ type: 'join', clientId: this.clientId(), name });
   }
 
-  startGame() { if (this.conn) this.conn.send({ type: 'start' }); }
+  startGame() {
+    if ((this.state.lobbyPlayers || []).length < 2) { this.showToast('Need at least 2 players to start', 'error'); return; }
+    if (this.conn) this.conn.send({ type: 'start' });
+  }
 
   onNetMessage(m) {
     if (m.type === 'state') {
@@ -478,7 +481,11 @@ class Component extends DCLogic {
       qrSvg: phase === 'lobby' ? this.makeQR(this.joinUrl()) : null,
       joinUrlText: phase === 'lobby' ? this.joinUrl() : '',
       onStartGame: () => this.startGame(),
-      startDisabled: lobbyRows.length === 0,
+      startDisabled: lobbyRows.length < 2,
+      startHint: lobbyRows.length < 2 ? 'Waiting for at least 2 players…' : 'Players keep their phones — you approve their trades here.',
+      startBg: lobbyRows.length < 2 ? '#161b22' : '#238636',
+      startBorder: lobbyRows.length < 2 ? '#30363d' : '#2ea043',
+      startColor: lobbyRows.length < 2 ? '#484f58' : '#fff',
       joinName: s.joinName,
       onJoinNameChange: e => this.setState({ joinName: e.target.value }),
       onSubmitName: () => this.submitName(),

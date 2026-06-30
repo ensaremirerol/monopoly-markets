@@ -61,10 +61,13 @@ export default class GameServer {
         break;
       }
 
-      case 'start': // host launches the market out of the lobby
+      case 'start': { // host launches the market out of the lobby
         if (!this.isHost(sender)) return this.sendError(sender, 'Only the host can start');
-        this.room = Room.startGame(this.requireRoom());
+        const res = Room.startGame(this.requireRoom());
+        if (res.error) return this.sendError(sender, res.error);
+        this.room = res.room;
         break;
+      }
 
       case 'order': {
         const res = Room.queueOrder(this.requireRoom(), sender.id, msg.order || {});

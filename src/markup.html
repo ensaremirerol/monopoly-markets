@@ -96,8 +96,8 @@
           </div>
         </sc-for>
 
-        <button onclick="{{ onStartGame }}" style="width:100%; height:52px; margin-top:10px; background:#238636; border:1px solid #2ea043; border-radius:10px; color:#fff; font:700 16px Inter,system-ui; cursor:pointer;">▶  START GAME</button>
-        <div style="margin-top:8px; color:#484f58; font:12px Inter,system-ui; text-align:center;">Players keep their phones — you approve their trades here.</div>
+        <button onclick="{{ onStartGame }}" style="width:100%; height:52px; margin-top:10px; background:{{ startBg }}; border:1px solid {{ startBorder }}; border-radius:10px; color:{{ startColor }}; font:700 16px Inter,system-ui; cursor:pointer;">▶  START GAME</button>
+        <div style="margin-top:8px; color:#484f58; font:12px Inter,system-ui; text-align:center;">{{ startHint }}</div>
       </div>
     </div>
   </div>

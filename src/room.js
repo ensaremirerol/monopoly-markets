@@ -25,8 +25,10 @@ if (!engine && typeof window !== 'undefined') engine = window.GameEngine;
 if (!engine && typeof globalThis !== 'undefined' && globalThis.GameEngine) engine = globalThis.GameEngine;
 function setEngine(e) { engine = e; }
 
-// Defensive caps — a client that knows the room code is otherwise untrusted.
-var MAX_PLAYERS = 12;
+// Monopoly seats 2–8 players. The cap also doubles as an abuse limit since a
+// client that knows the room code is otherwise untrusted.
+var MIN_PLAYERS = 2;
+var MAX_PLAYERS = 8;
 var MAX_PENDING_PER_PLAYER = 20;
 var MAX_NAME_LEN = 24;
 
@@ -91,9 +93,12 @@ function addPlayer(room, connId, clientId, name) {
 }
 
 function startGame(room) {
+  if (room.game.players.length < MIN_PLAYERS) {
+    return { room: room, error: 'Need at least ' + MIN_PLAYERS + ' players to start' };
+  }
   var r = clone(room);
   r.started = true;
-  return r;
+  return { room: r };
 }
 
 function fail(room, msg) { return { room: room, error: msg }; }
