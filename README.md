@@ -153,6 +153,27 @@ ONLINE** (that tab is the authority). Open a second tab, add `?room=<CODE>` from
 the lobby's QR/code, and it joins as a guest. Peer discovery over the DHT
 takes ~1–3 s.
 
+**Phones / cellular need TURN.** WebRTC first tries a direct connection using
+STUN, which works across most home and office NATs (two laptops on different
+Wi-Fi connect fine). But mobile carriers put phones behind *symmetric* NAT,
+which STUN cannot traverse — so a phone on cellular needs a **TURN relay** to
+reach the host. The app ships the free public OpenRelay TURN servers as a
+best-effort default. They're shared and rate-limited, so for anything real
+provision your own TURN and set it before the page loads:
+
+```html
+<script>
+  // Replaces the default TURN servers. iceServers-style array.
+  window.TRYSTERO_TURN = [
+    { urls: 'turn:your-turn-host:3478', username: 'user', credential: 'pass' },
+  ];
+</script>
+```
+
+[Cloudflare offers a free TURN service](https://developers.cloudflare.com/calls/turn/);
+[metered.ca](https://www.metered.ca/tools/openrelay/) has a free tier too.
+(A phone on the **same Wi-Fi** as the host usually connects without TURN.)
+
 ---
 
 ## Future Work

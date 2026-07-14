@@ -32,8 +32,33 @@
   // sharing the public torrent trackers.
   var APP_ID = 'monopoly-markets-v1';
 
+  // Trystero's defaults ship STUN only (Google + Twilio). STUN is enough to
+  // punch through most home/office NATs — which is why two laptops on different
+  // networks connect fine — but it CANNOT traverse a symmetric NAT. Mobile
+  // carriers put phones behind carrier-grade (symmetric) NAT, so a phone on
+  // cellular needs a TURN relay to connect. These are the free public OpenRelay
+  // (metered.ca) TURN servers, best-effort. For a reliable game (or if these go
+  // down), provision your own TURN and set `window.TRYSTERO_TURN` to an
+  // iceServers-style array before the page loads — it replaces these.
+  var DEFAULT_TURN = [
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+  ];
+
   function trystero() {
     return (typeof window !== 'undefined' && window.trystero) || null;
+  }
+
+  // The room config handed to Trystero. `turnConfig` is merged into Trystero's
+  // default STUN list, so we keep STUN (fast, direct) and fall back to TURN
+  // (relayed) only when a direct path can't be found.
+  function roomConfig() {
+    var turn = (typeof window !== 'undefined' && Array.isArray(window.TRYSTERO_TURN))
+      ? window.TRYSTERO_TURN : DEFAULT_TURN;
+    var cfg = { appId: APP_ID, turnConfig: turn };
+    if (typeof window !== 'undefined' && window.TRYSTERO_RTC_CONFIG) cfg.rtcConfig = window.TRYSTERO_RTC_CONFIG;
+    return cfg;
   }
 
   function getRoomIdFromURL() {
@@ -63,7 +88,7 @@
   function createHost(cfg) {
     var t = trystero();
     if (!t) throw new Error('Trystero not loaded');
-    var room = t.joinRoom({ appId: APP_ID }, cfg.roomId);
+    var room = t.joinRoom(roomConfig(), cfg.roomId);
     var action = room.makeAction('game');
     var send = action[0], recv = action[1];
     var peers = {};
@@ -96,7 +121,7 @@
   function joinAsPlayer(cfg) {
     var t = trystero();
     if (!t) throw new Error('Trystero not loaded');
-    var room = t.joinRoom({ appId: APP_ID }, cfg.roomId);
+    var room = t.joinRoom(roomConfig(), cfg.roomId);
     var action = room.makeAction('game');
     var send = action[0], recv = action[1];
     var hostId = null;
