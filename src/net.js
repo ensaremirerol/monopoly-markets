@@ -1,83 +1,203 @@
 'use strict';
 // ============================================================================
-// Monopoly Markets — client networking (cloud multiplayer)
+// Monopoly Markets — client networking (serverless P2P multiplayer)
 // ----------------------------------------------------------------------------
-// A tiny dependency-free reconnecting WebSocket that speaks to the PartyKit
-// server (party/server.js). Kept out of npm-land on purpose so the client stays
-// a single self-contained file — PartyKit accepts plain WebSocket connections
-// at /parties/main/<room>.
+// Drop-in replacement for the old PartyKit WebSocket client. It keeps the exact
+// same surface the UI already speaks to —
 //
-// Point it at your deployed server in one of these ways (first wins):
-//   1. ?host=<your-app>.<user>.partykit.dev  in the page URL
-//   2. window.PARTYKIT_HOST = '<your-app>.<user>.partykit.dev'  before load
-//   3. otherwise defaults to 127.0.0.1:1999 for `npm run party:dev`
+//     window.GameNet.connect({ room, role, onOpen, onStatus, onMessage })
+//        → { send, close }
+//
+// — so component.js did not need to change how it talks to the network.
+//
+// The transport underneath is now peer-to-peer (game-p2p.js / Trystero), with
+// NO server. One browser is the authority:
+//
+//   • role:'host'  — this browser holds the only authoritative game state and
+//     runs the room reducers (src/room.js) locally. It is the same logic the
+//     PartyKit Durable Object used to run server-side; here it just runs in the
+//     host's tab. Guests' action messages arrive over WebRTC, get validated,
+//     and each peer is sent its own per-connection view.
+//
+//   • role:'guest' — this browser holds no state. It relays the UI's messages
+//     to the host and renders whatever view the host sends back.
+//
+// Messages in/out are identical to before:
+//   UI → net : {type:'host'|'join'|'start'|'order'|'approve'|'reject'|'advance', …}
+//   net → UI : {type:'state', view} | {type:'idle'} | {type:'error', error}
 // ============================================================================
 (function () {
-  var DEFAULT_HOST = '127.0.0.1:1999';
+  // A synthetic connection id for the host's own seat, so the host is just
+  // another "connection" as far as the room reducers are concerned. Guest ids
+  // come from Trystero and are long random strings, so no collision.
+  var HOST_ID = '__host__';
+  var TRYSTERO_TIMEOUT = 12000;
 
-  function resolveHost() {
-    try {
-      var q = new URLSearchParams(location.search).get('host');
-      if (q) return q;
-    } catch (e) { /* ignore */ }
-    if (typeof window !== 'undefined' && typeof window.PARTYKIT_HOST === 'string' && window.PARTYKIT_HOST) {
-      return window.PARTYKIT_HOST;
+  // Trystero loads as an async ES module (index.html) and fires this event when
+  // window.trystero is ready. connect() is always user-initiated (a button
+  // click) well after page load, so this normally resolves immediately.
+  function whenTrystero(onReady, onFail) {
+    if (window.trystero && window.trystero.joinRoom) {
+      // Defer so the synchronous connect() call returns and `this.conn` is
+      // assigned before onOpen fires.
+      setTimeout(onReady, 0);
+      return;
     }
-    // If the client is served over http(s) from a real host, assume the server
-    // is the same origin (e.g. PartyKit serving the static client) — zero
-    // config. file:// and localhost fall through to the dev default.
-    try {
-      if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol) &&
-          location.host && !isLocal(location.host)) {
-        return location.host;
-      }
-    } catch (e) { /* ignore */ }
-    return DEFAULT_HOST;
-  }
-
-  function isLocal(host) {
-    return /^(localhost|127\.|0\.0\.0\.0|\[?::1)/.test(host);
+    var done = false;
+    var timer = setTimeout(function () { if (!done) { done = true; onFail && onFail(); } }, TRYSTERO_TIMEOUT);
+    window.addEventListener('trystero-ready', function () {
+      if (done) return;
+      done = true; clearTimeout(timer); onReady();
+    }, { once: true });
   }
 
   function connect(opts) {
-    var host = opts.host || resolveHost();
-    var room = opts.room;
-    var proto = isLocal(host) ? 'ws' : 'wss';
-    var url = proto + '://' + host + '/parties/main/' + encodeURIComponent(room);
+    var role = opts.role === 'host' ? 'host' : 'guest';
+    var roomId = opts.room;
+    var closed = false;
+    var transport = null;
+    var hostHandle = null;   // host: function(connId, msg)
+    var outbox = [];         // messages sent before the transport is ready
 
-    var ws = null, closed = false, retry = 0;
+    function status(s) { if (opts.onStatus) opts.onStatus(s); }
+    function deliver(m) { if (opts.onMessage) opts.onMessage(m); }
+    function fail() { status('error'); }
 
-    function open() {
-      try { ws = new WebSocket(url); } catch (e) { schedule(); return; }
-      ws.onopen = function () { retry = 0; if (opts.onStatus) opts.onStatus('connected'); if (opts.onOpen) opts.onOpen(); };
-      ws.onmessage = function (e) {
-        var m; try { m = JSON.parse(e.data); } catch (_) { return; }
-        if (opts.onMessage) opts.onMessage(m);
-      };
-      ws.onclose = function () {
+    status('connecting');
+    if (role === 'host') startHost(); else startGuest();
+
+    // ── HOST: authoritative, runs the room reducers locally ────────────────
+    function startHost() {
+      whenTrystero(function () {
         if (closed) return;
-        if (opts.onStatus) opts.onStatus('reconnecting');
-        schedule();
-      };
-      ws.onerror = function () { try { ws.close(); } catch (_) { } };
-    }
-    function schedule() {
-      retry++;
-      setTimeout(function () { if (!closed) open(); }, Math.min(5000, 400 * retry));
+        var R = window.GameRoom;
+        if (!R) { fail(); return; }
+        var game = null; // room.js state; created when the UI sends {type:'host'}
+
+        transport = window.GameP2P.createHost({
+          roomId: roomId,
+          onPeerJoin: function (peerId) { sendViewTo(peerId); },     // bring newcomer up to date
+          onPeerLeave: function () { /* members persist; clientId re-attaches on rejoin */ },
+          onMessage: function (peerId, data) { handle(peerId, data); },
+        });
+
+        function view(connId) {
+          if (!game) return { type: 'idle' };
+          return { type: 'state', view: R.viewFor(game, connId) };
+        }
+        function sendViewTo(connId) {
+          if (connId === HOST_ID) deliver(view(connId));
+          else transport.sendTo(connId, view(connId));
+        }
+        function broadcastViews() {
+          sendViewTo(HOST_ID);
+          transport.peers().forEach(sendViewTo);
+        }
+        function err(connId, error) {
+          var m = { type: 'error', error: error };
+          if (connId === HOST_ID) deliver(m); else transport.sendTo(connId, m);
+        }
+        function isHost(connId) { return game && game.hostConnId === connId; }
+        function requireRoom() { if (!game) game = R.create({}); return game; }
+
+        // Mirrors the old PartyKit server's onMessage switch exactly.
+        function handle(connId, msg) {
+          if (!msg || typeof msg !== 'object') return;
+          switch (msg.type) {
+            case 'host': {
+              var r = game;
+              if (r && r.hostClientId && msg.clientId !== r.hostClientId) {
+                return err(connId, 'This room already has a host');
+              }
+              game = (r && r.game && r.hostClientId)
+                ? R.claimHost(r, connId, msg.clientId)
+                : R.claimHost(R.create(msg.opts || { names: [] }), connId, msg.clientId);
+              break;
+            }
+            case 'join': {
+              var jr = R.addPlayer(requireRoom(), connId, msg.clientId, msg.name);
+              if (jr.error) return err(connId, jr.error);
+              game = jr.room;
+              break;
+            }
+            case 'start': {
+              if (!isHost(connId)) return err(connId, 'Only the host can start');
+              var sr = R.startGame(requireRoom());
+              if (sr.error) return err(connId, sr.error);
+              game = sr.room;
+              break;
+            }
+            case 'order': {
+              var or = R.queueOrder(requireRoom(), connId, msg.order || {});
+              if (or.error) return err(connId, or.error);
+              game = or.room;
+              break;
+            }
+            case 'approve': {
+              if (!isHost(connId)) return err(connId, 'Only the host can approve');
+              var ar = R.approveOrder(game, msg.orderId);
+              if (ar.error) return err(connId, ar.error); // order stays queued
+              game = ar.room;
+              break;
+            }
+            case 'reject':
+              if (!isHost(connId)) return err(connId, 'Only the host can reject');
+              game = R.rejectOrder(game, msg.orderId);
+              break;
+            case 'advance':
+              if (!isHost(connId)) return err(connId, 'Only the host can advance');
+              game = R.advance(game).room;
+              break;
+            default:
+              return;
+          }
+          broadcastViews();
+        }
+
+        hostHandle = handle;
+        status('connected');
+        if (opts.onOpen) opts.onOpen();          // → UI sends {type:'host'}
+        flushOutbox(function (m) { handle(HOST_ID, m); });
+      }, fail);
     }
 
-    open();
+    // ── GUEST: no state; relay to host, render host's views ────────────────
+    function startGuest() {
+      whenTrystero(function () {
+        if (closed) return;
+        transport = window.GameP2P.joinAsPlayer({
+          roomId: roomId,
+          onMessage: function (data) { deliver(data); },
+          onHostConnect: function () { status('connected'); },
+          onHostLeave: function () { status('reconnecting'); },
+        });
+        if (opts.onOpen) opts.onOpen();
+        flushOutbox(function (m) { transport.send(m); });
+      }, fail);
+    }
+
+    function flushOutbox(fn) {
+      var q = outbox; outbox = [];
+      for (var i = 0; i < q.length; i++) fn(q[i]);
+    }
 
     return {
-      url: url,
-      send: function (obj) {
-        try { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); } catch (_) { }
+      send: function (m) {
+        if (closed) return;
+        if (role === 'host') {
+          if (hostHandle) hostHandle(HOST_ID, m); else outbox.push(m);
+        } else {
+          if (transport) transport.send(m); else outbox.push(m);
+        }
       },
-      close: function () { closed = true; try { ws.close(); } catch (_) { } },
+      close: function () {
+        closed = true;
+        try { if (transport) transport.leave(); } catch (e) { /* ignore */ }
+      },
     };
   }
 
-  var NET = { connect: connect, resolveHost: resolveHost };
+  var NET = { connect: connect };
   if (typeof window !== 'undefined') window.GameNet = NET;
   if (typeof module !== 'undefined' && module.exports) module.exports = NET;
 })();

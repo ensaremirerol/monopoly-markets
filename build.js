@@ -24,7 +24,19 @@ const markup = fs.readFileSync(path.join(root, 'src/markup.html'), 'utf8').trim(
 const component = fs.readFileSync(path.join(root, 'src/component.js'), 'utf8').trim();
 const engine = fs.readFileSync(path.join(root, 'src/engine.js'), 'utf8').trim();
 const net = fs.readFileSync(path.join(root, 'src/net.js'), 'utf8').trim();
+const p2p = fs.readFileSync(path.join(root, 'src/game-p2p.js'), 'utf8').trim();
+const roomjs = fs.readFileSync(path.join(root, 'src/room.js'), 'utf8').trim();
 const qrcode = fs.readFileSync(path.join(root, 'src/qrcode.js'), 'utf8').trim();
+
+// Trystero (P2P transport dependency) is loaded from jsDelivr as a self-contained
+// ES module and exposed on window.trystero. See src/game-p2p.js for why this exact
+// URL (0.21.1 /torrent/+esm) rather than the classic <script> the spec suggested.
+const TRYSTERO_TAG =
+  '<script type="module" id="trystero-cdn">\n' +
+  "import { joinRoom, selfId } from 'https://cdn.jsdelivr.net/npm/trystero@0.21.1/torrent/+esm';\n" +
+  'window.trystero = { joinRoom: joinRoom, selfId: selfId };\n' +
+  "window.dispatchEvent(new Event('trystero-ready'));\n" +
+  '</script>\n';
 
 let html = fs.readFileSync(indexPath, 'utf8');
 
@@ -56,13 +68,25 @@ template = template.slice(0, bodyStart) + '\n' + component + '\n' + template.sli
 //    DC runtime evaluates the component). Strip prior injections so rebuilds
 //    stay clean.
 template = template.replace(/<script id="game-engine">[\s\S]*?<\/script>\s*/, '');
+template = template.replace(/<script id="game-p2p">[\s\S]*?<\/script>\s*/, '');
+template = template.replace(/<script id="game-room">[\s\S]*?<\/script>\s*/, '');
 template = template.replace(/<script id="game-net">[\s\S]*?<\/script>\s*/, '');
 template = template.replace(/<script id="game-qr">[\s\S]*?<\/script>\s*/, '');
 const reOpenMatch = template.match(scriptOpenRe); // index shifted after step 3
+// Order matters: room.js reads window.GameEngine at load; net.js reads
+// window.GameEngine, window.GameRoom and window.GameP2P at connect time.
 const globals = '<script id="game-qr">\n' + qrcode + '\n</script>\n' +
   '<script id="game-engine">\n' + engine + '\n</script>\n' +
+  '<script id="game-p2p">\n' + p2p + '\n</script>\n' +
+  '<script id="game-room">\n' + roomjs + '\n</script>\n' +
   '<script id="game-net">\n' + net + '\n</script>\n';
 template = template.slice(0, reOpenMatch.index) + globals + template.slice(reOpenMatch.index);
+
+// 4b) Load Trystero in the OUTER page <head> (a real ES-module <script>, not
+//     inside the JSON template blob) so window.trystero is ready before the app
+//     boots. Strip any prior injection first so rebuilds stay idempotent.
+html = html.replace(/[ \t]*<script type="module" id="trystero-cdn">[\s\S]*?<\/script>\s*/, '');
+html = html.replace('</head>', '  ' + TRYSTERO_TAG + '</head>'); // first match = outer <head>
 
 // 5) Re-stringify and write the bundle back. Two escapes mirror what the
 //    original bundler did, both by replacing the "/" with its / form:

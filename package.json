@@ -5,14 +5,6 @@
   "license": "MIT",
   "scripts": {
     "test": "node tests/engine.test.js && node tests/room.test.js",
-    "build": "node build.js",
-    "party:dev": "partykit dev",
-    "party:deploy": "partykit deploy"
-  },
-  "devDependencies": {
-    "partykit": "^0.0.111"
-  },
-  "dependencies": {
-    "partysocket": "^1.0.2"
+    "build": "node build.js"
   }
 }

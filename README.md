@@ -105,13 +105,17 @@ rules there, not in the bundle.
 
 ---
 
-## Multiplayer (cloud)
+## Multiplayer (serverless P2P)
 
 Players join one game from their own phones, watch the market live, and **queue
 orders the host approves** — nothing is filled automatically. It uses a
-host-authoritative model on [PartyKit](https://www.partykit.io/) (Cloudflare
-Durable Objects): the server holds the only copy of the game state and runs the
-same `src/engine.js` rules; clients only *propose*.
+host-authoritative model over **peer-to-peer WebRTC** ([Trystero](https://github.com/dmotz/trystero),
+torrent strategy): **there is no server.** The player who clicks *Host* holds
+the only copy of the game state — in their own browser tab — and runs the
+`src/room.js` reducers over the same `src/engine.js` rules; guests only
+*propose*. Peers find each other through the public BitTorrent DHT, then talk
+directly browser-to-browser. No backend, no accounts, no API keys, no hosting
+cost — it runs from plain GitHub Pages.
 
 **The flow** (Kahoot-style — no need to pre-enter players)
 
@@ -125,30 +129,29 @@ A dropped phone that reconnects rejoins its own player (a stable per-device id i
 
 **How it's built**
 
-- `src/room.js` — room reducer (dynamic join / start / queue / approve / reject / advance), pure and unit-tested; orders are server-stamped with the member's player (anti-spoof)
-- `party/server.js` — PartyKit server: one Durable Object per room, wraps the reducer, persists across hibernation, sends each connection its own view
-- `src/net.js` — the client's dependency-free reconnecting WebSocket
+- `src/room.js` — room reducer (dynamic join / start / queue / approve / reject / advance), pure and unit-tested; orders are host-stamped with the member's player (anti-spoof)
+- `src/game-p2p.js` — the P2P transport: a thin Trystero wrapper (host / guest, per-peer targeted sends, peer join/leave)
+- `src/net.js` — the glue: keeps the old `window.GameNet.connect(...)` surface, so the UI is unchanged, but the host branch runs the `room.js` reducers locally and each guest is sent its own per-connection view
 - `src/qrcode.js` — vendored MIT QR encoder (no runtime dependency)
-- Lobby / host / phone views all live in the same `index.html` (no separate build)
-- **Concurrency is safe by construction:** each room is single-threaded and the server is the only writer
+- Lobby / host / phone views all live in the same `index.html`
+- **Concurrency is safe by construction:** the single host tab is the only writer, applying one action at a time
 
 ### Setting it up
 
-Requires **Node 18+** (PartyKit's CLI needs it).
+Nothing to deploy — it's static. Serve `index.html` from anywhere (GitHub
+Pages, or any static host) over **https** (WebRTC needs a secure context;
+`localhost` counts). Trystero loads from jsDelivr at runtime, so the page needs
+internet on first load.
 
 ```bash
-npm install
-npm run party:dev           # server + client at http://127.0.0.1:1999
-# deploy to the cloud (one-time GitHub login, free tier):
-npx partykit login
-npm run party:deploy        # → https://monopoly-markets.<your-user>.partykit.dev
+# local dev: any static server works, e.g.
+python3 -m http.server 8000      # then open http://localhost:8000
 ```
 
-**Pointing the client at the server.** The client auto-uses its own origin, so
-the simplest path is to serve `index.html` from the same place as the server
-(PartyKit can host static assets). Otherwise open the client with
-`?host=<your-app>.<user>.partykit.dev` (or set `window.PARTYKIT_HOST`); it
-defaults to `127.0.0.1:1999` for local dev.
+**Testing two players locally.** Open the page in one tab and click **HOST
+ONLINE** (that tab is the authority). Open a second tab, add `?room=<CODE>` from
+the lobby's QR/code, and it joins as a guest. Peer discovery over the DHT
+takes ~1–3 s.
 
 ---
 

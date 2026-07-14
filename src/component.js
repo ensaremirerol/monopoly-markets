@@ -127,12 +127,12 @@ class Component extends DCLogic {
     return id;
   }
 
-  // The URL a player scans/opens to join — encodes the server host + room code.
+  // The URL a player scans/opens to join. P2P has no server address to encode —
+  // the room code alone is the rendezvous (peers meet over the BitTorrent DHT).
   joinUrl() {
-    const host = window.GameNet ? window.GameNet.resolveHost() : '';
     let base = '';
     try { base = location.origin + location.pathname; } catch (e) { base = ''; }
-    return base + '?host=' + encodeURIComponent(host) + '&room=' + this.state.roomCode;
+    return base + '?room=' + encodeURIComponent(this.state.roomCode);
   }
 
   makeQR(text) {
@@ -156,6 +156,7 @@ class Component extends DCLogic {
     this.setState({ phase: 'lobby', netRole: 'host', roomCode: code, connStatus: 'connecting', activePlayer: 0, lobbyPlayers: [], started: false });
     this.conn = window.GameNet.connect({
       room: code,
+      role: 'host',
       onOpen: () => this.conn.send({ type: 'host', clientId: this.clientId(), opts }),
       onStatus: (s) => this.setState({ connStatus: s }),
       onMessage: (m) => this.onNetMessage(m),
@@ -169,6 +170,7 @@ class Component extends DCLogic {
     this.setState({ phase: 'joinName', netRole: 'spectator', roomCode: code, connStatus: 'connecting' });
     this.conn = window.GameNet.connect({
       room: code,
+      role: 'guest',
       onStatus: (s) => this.setState({ connStatus: s }),
       onMessage: (m) => this.onNetMessage(m),
     });
