@@ -35,6 +35,24 @@
 
   function mplog(s) { try { if (window.MPLOG) window.MPLOG(s); } catch (e) { /* ignore */ } }
 
+  // Report which signaling relays actually opened — the key evidence for
+  // "peers joined but never found each other" bugs.
+  function logRelays(tag) {
+    try {
+      var f = window.trystero && window.trystero.getRelaySockets;
+      if (!f) return;
+      var socks = f() || {};
+      var urls = Object.keys(socks);
+      var open = urls.filter(function (u) { return socks[u] && socks[u].readyState === 1; });
+      mplog(tag + ' relays: ' + open.length + '/' + urls.length + ' open' +
+        (open.length ? ' [' + open.map(function (u) { return u.replace('wss://', ''); }).join(', ') + ']' : ''));
+    } catch (e) { /* ignore */ }
+  }
+  function scheduleRelayLog(getClosed) {
+    setTimeout(function () { if (!getClosed()) logRelays('@3s'); }, 3000);
+    setTimeout(function () { if (!getClosed()) logRelays('@10s'); }, 10000);
+  }
+
   // Trystero loads as an async ES module (index.html) and fires this event when
   // window.trystero is ready. connect() is always user-initiated (a button
   // click) well after page load, so this normally resolves immediately.
@@ -169,6 +187,7 @@
         hostHandle = handle;
         status('connected');
         mplog('host: P2P room ready, waiting for peers');
+        scheduleRelayLog(function () { return closed; });
         if (opts.onOpen) opts.onOpen();          // → UI sends {type:'host'}
         flushOutbox(function (m) { handle(HOST_ID, m); });
       }, fail);
@@ -191,6 +210,7 @@
         });
         if (opts.onOpen) opts.onOpen();
         flushOutbox(function (m) { transport.send(m); });
+        scheduleRelayLog(function () { return closed; });
         // If no peer shows up, say so — this is the "same-Wi-Fi still fails" case.
         setTimeout(function () {
           if (!closed && !gotState) mplog('guest: still no host after 15s — host tab open on this room? relays reachable?');

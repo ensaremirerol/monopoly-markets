@@ -38,8 +38,8 @@ const qrcode = fs.readFileSync(path.join(root, 'src/qrcode.js'), 'utf8').trim();
 // and far more reliable for rendezvous. Same joinRoom/selfId API.
 const TRYSTERO_TAG =
   '<script type="module" id="trystero-cdn">\n' +
-  "import { joinRoom, selfId } from 'https://cdn.jsdelivr.net/npm/trystero@0.21.1/nostr/+esm';\n" +
-  'window.trystero = { joinRoom: joinRoom, selfId: selfId };\n' +
+  "import { joinRoom, selfId, getRelaySockets } from 'https://cdn.jsdelivr.net/npm/trystero@0.21.1/nostr/+esm';\n" +
+  'window.trystero = { joinRoom: joinRoom, selfId: selfId, getRelaySockets: getRelaySockets };\n' +
   "window.dispatchEvent(new Event('trystero-ready'));\n" +
   '</script>\n';
 
