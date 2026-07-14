@@ -33,6 +33,8 @@
   var HOST_ID = '__host__';
   var TRYSTERO_TIMEOUT = 12000;
 
+  function mplog(s) { try { if (window.MPLOG) window.MPLOG(s); } catch (e) { /* ignore */ } }
+
   // Trystero loads as an async ES module (index.html) and fires this event when
   // window.trystero is ready. connect() is always user-initiated (a button
   // click) well after page load, so this normally resolves immediately.
@@ -61,9 +63,10 @@
 
     function status(s) { if (opts.onStatus) opts.onStatus(s); }
     function deliver(m) { if (opts.onMessage) opts.onMessage(m); }
-    function fail() { status('error'); }
+    function fail() { status('error'); mplog('✗ transport failed to start (Trystero unavailable)'); }
 
     status('connecting');
+    mplog('connect · role=' + role + ' · room=' + roomId);
     if (role === 'host') startHost(); else startGuest();
 
     // ── HOST: authoritative, runs the room reducers locally ────────────────
@@ -74,10 +77,11 @@
         if (!R) { fail(); return; }
         var game = null; // room.js state; created when the UI sends {type:'host'}
 
+        mplog('host: joining P2P room…');
         transport = window.GameP2P.createHost({
           roomId: roomId,
-          onPeerJoin: function (peerId) { sendViewTo(peerId); },     // bring newcomer up to date
-          onPeerLeave: function () { /* members persist; clientId re-attaches on rejoin */ },
+          onPeerJoin: function (peerId) { mplog('host: peer joined ' + peerId); sendViewTo(peerId); },
+          onPeerLeave: function (peerId) { mplog('host: peer left ' + peerId); },
           onMessage: function (peerId, data) { handle(peerId, data); },
         });
 
@@ -164,6 +168,7 @@
 
         hostHandle = handle;
         status('connected');
+        mplog('host: P2P room ready, waiting for peers');
         if (opts.onOpen) opts.onOpen();          // → UI sends {type:'host'}
         flushOutbox(function (m) { handle(HOST_ID, m); });
       }, fail);
@@ -173,14 +178,23 @@
     function startGuest() {
       whenTrystero(function () {
         if (closed) return;
+        mplog('guest: joining P2P room, searching for host over DHT…');
+        var gotState = false;
         transport = window.GameP2P.joinAsPlayer({
           roomId: roomId,
-          onMessage: function (data) { deliver(data); },
-          onHostConnect: function () { status('connected'); },
-          onHostLeave: function () { status('reconnecting'); },
+          onMessage: function (data) {
+            if (!gotState) { gotState = true; mplog('guest: first message from host (' + (data && data.type) + ') ✓'); }
+            deliver(data);
+          },
+          onHostConnect: function () { status('connected'); mplog('guest: connected to host ✓'); },
+          onHostLeave: function () { status('reconnecting'); mplog('guest: host connection lost'); },
         });
         if (opts.onOpen) opts.onOpen();
         flushOutbox(function (m) { transport.send(m); });
+        // If no peer shows up, say so — this is the "same-Wi-Fi still fails" case.
+        setTimeout(function () {
+          if (!closed && !gotState) mplog('guest: still no host after 15s — host tab open on this room? trackers reachable?');
+        }, 15000);
       }, fail);
     }
 

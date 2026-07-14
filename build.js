@@ -38,6 +38,13 @@ const TRYSTERO_TAG =
   "window.dispatchEvent(new Event('trystero-ready'));\n" +
   '</script>\n';
 
+// On-screen connection diagnostics. Phones have no dev console, so this overlay
+// prints each connection milestone + uncaught errors right on the page. It
+// shows automatically when the URL has ?room= or ?debug, or on any error. It
+// re-attaches itself to <html> so the app re-rendering the <body> can't wipe it.
+const DIAG_SCRIPT = fs.readFileSync(path.join(root, 'src/diag.js'), 'utf8').trim();
+const DIAG_TAG = '<script id="mp-diag-boot">\n' + DIAG_SCRIPT + '\n</script>\n';
+
 let html = fs.readFileSync(indexPath, 'utf8');
 
 // 1) Pull the template string out of the bundle.
@@ -87,6 +94,13 @@ template = template.slice(0, reOpenMatch.index) + globals + template.slice(reOpe
 //     boots. Strip any prior injection first so rebuilds stay idempotent.
 html = html.replace(/[ \t]*<script type="module" id="trystero-cdn">[\s\S]*?<\/script>\s*/, '');
 html = html.replace('</head>', '  ' + TRYSTERO_TAG + '</head>'); // first match = outer <head>
+
+// 4c) On-screen diagnostics overlay, injected into the outer <body>. Anchor at
+//     the very end of the file — the template JSON blob contains its own
+//     (earlier) </body>, so a first-match replace would land inside the blob and
+//     get overwritten when the template is re-stringified in step 5.
+html = html.replace(/[ \t]*<script id="mp-diag-boot">[\s\S]*?<\/script>\s*/, '');
+html = html.replace(/<\/body>\s*<\/html>\s*$/i, '  ' + DIAG_TAG + '</body>\n</html>\n');
 
 // 5) Re-stringify and write the bundle back. Two escapes mirror what the
 //    original bundler did, both by replacing the "/" with its / form:
