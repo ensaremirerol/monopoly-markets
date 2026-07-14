@@ -96,6 +96,16 @@
           </div>
         </sc-for>
 
+        <sc-if value="{{ hostCanSeat }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; gap:8px; margin-top:6px; margin-bottom:4px;">
+            <input value="{{ joinName }}" onchange="{{ onJoinNameChange }}" placeholder="Play too? Your name" maxlength="20" style="flex:1; height:44px; background:#161b22; border:1px solid #30363d; border-radius:10px; color:#e6edf3; font:15px Inter,system-ui; padding:0 14px; outline:none; box-sizing:border-box;">
+            <button onclick="{{ onSubmitName }}" style="flex-shrink:0; padding:0 18px; height:44px; background:#161b22; border:1px solid #30363d; border-radius:10px; color:#e6edf3; font:700 13px Inter,system-ui; cursor:pointer;">TAKE SEAT</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ hostSeated }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:6px; margin-bottom:4px; padding:10px 14px; background:#0d2818; border:1px solid #238636; border-radius:10px; font:600 13px Inter,system-ui; color:#3fb950;">You're playing as {{ hostSeatName }} — you'll trade and approve from here.</div>
+        </sc-if>
+
         <button onclick="{{ onStartGame }}" style="width:100%; height:52px; margin-top:10px; background:{{ startBg }}; border:1px solid {{ startBorder }}; border-radius:10px; color:{{ startColor }}; font:700 16px Inter,system-ui; cursor:pointer;">▶  START GAME</button>
         <div style="margin-top:8px; color:#484f58; font:12px Inter,system-ui; text-align:center;">{{ startHint }}</div>
       </div>
@@ -152,9 +162,11 @@
       </sc-if>
       <div style="width:1px; height:28px; background:#21262d; flex-shrink:0;"></div>
       <div style="display:flex; gap:0; flex:1; overflow-x:auto; height:100%; align-items:stretch;">
-        <sc-for list="{{ playerTabs }}" as="tab" hint-placeholder-count="3">
-          <button onclick="{{ tab.onClick }}" style="height:100%; padding:0 18px; background:{{ tab.bg }}; color:{{ tab.color }}; border:none; border-bottom:2px solid {{ tab.accentBorder }}; font:500 13px Inter,system-ui; cursor:pointer; white-space:nowrap; flex-shrink:0; transition:color 0.1s; letter-spacing:0.2px;">{{ tab.name }}<span style="color:#f85149;">{{ tab.flag }}</span></button>
-        </sc-for>
+        <sc-if value="{{ showPlayerTabs }}" hint-placeholder-val="{{ true }}">
+          <sc-for list="{{ playerTabs }}" as="tab" hint-placeholder-count="3">
+            <button onclick="{{ tab.onClick }}" style="height:100%; padding:0 18px; background:{{ tab.bg }}; color:{{ tab.color }}; border:none; border-bottom:2px solid {{ tab.accentBorder }}; font:500 13px Inter,system-ui; cursor:pointer; white-space:nowrap; flex-shrink:0; transition:color 0.1s; letter-spacing:0.2px;">{{ tab.name }}<span style="color:#f85149;">{{ tab.flag }}</span></button>
+          </sc-for>
+        </sc-if>
       </div>
       <button onclick="{{ onSave }}" style="height:38px; padding:0 14px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#8b949e; font:700 12px Inter,system-ui; cursor:pointer; flex-shrink:0; white-space:nowrap;">💾 SAVE</button>
       <button onclick="{{ onAdvance }}" style="height:38px; padding:0 20px; background:#238636; border:1px solid #2ea043; border-radius:6px; color:#fff; font:700 13px Inter,system-ui; cursor:pointer; flex-shrink:0; letter-spacing:0.3px; white-space:nowrap;">▶ ADVANCE ROUND</button>
@@ -378,6 +390,7 @@
       <div style="font:700 10px Inter,system-ui; letter-spacing:1.5px; text-transform:uppercase; color:#484f58; margin-bottom:9px;">Trade Execution</div>
       <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
 
+        <sc-if value="{{ showTradePlayerSelect }}" hint-placeholder-val="{{ true }}">
         <div>
           <div style="font:10px Inter,system-ui; color:#484f58; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:5px;">Player</div>
           <select value="{{ tradePlayerIdx }}" onchange="{{ onTradePlayerChange }}" style="background:#0d1117; border:1px solid #30363d; border-radius:5px; color:#e6edf3; font:12px 'JetBrains Mono',monospace; padding:0 10px; cursor:pointer; min-width:120px; height:34px;">
@@ -386,6 +399,13 @@
             </sc-for>
           </select>
         </div>
+        </sc-if>
+        <sc-if value="{{ hostSeated }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="font:10px Inter,system-ui; color:#484f58; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:5px;">Trading as</div>
+          <div style="height:34px; display:flex; align-items:center; font:700 13px 'JetBrains Mono',monospace; color:#58a6ff; min-width:120px;">{{ hostSeatName }}</div>
+        </div>
+        </sc-if>
 
         <div>
           <div style="font:10px Inter,system-ui; color:#484f58; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:5px;">Stock</div>

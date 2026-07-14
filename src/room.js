@@ -70,13 +70,16 @@ function claimHost(room, connId, clientId) {
   return r;
 }
 
-// Add a player (new name) or re-attach a returning one by clientId.
+// Add a player (new name) or re-attach a returning one by clientId. The host
+// can take a seat too (they play as well as moderate) — in that case the member
+// keeps its 'host' role and simply gains a playerIdx.
 function addPlayer(room, connId, clientId, name) {
   var r = clone(room);
   var clean = cleanName(name);
+  var role = connId === r.hostConnId ? 'host' : 'player';
   if (clientId && r.clients[clientId] != null) {
     var idx = r.clients[clientId];
-    r.members[connId] = { role: 'player', clientId: clientId, playerIdx: idx };
+    r.members[connId] = { role: role, clientId: clientId, playerIdx: idx };
     if (clean) {
       r.game = Object.assign({}, r.game, {
         players: r.game.players.map(function (p, i) { return i === idx ? Object.assign({}, p, { name: clean }) : p; }),
@@ -88,7 +91,7 @@ function addPlayer(room, connId, clientId, name) {
   r.game = engine.addPlayer(r.game, clean || ('Player ' + (r.game.players.length + 1)));
   var newIdx = r.game.players.length - 1;
   if (clientId) r.clients[clientId] = newIdx;
-  r.members[connId] = { role: 'player', clientId: clientId || null, playerIdx: newIdx };
+  r.members[connId] = { role: role, clientId: clientId || null, playerIdx: newIdx };
   return { room: r, playerIdx: newIdx };
 }
 
@@ -121,6 +124,27 @@ function queueOrder(room, connId, order) {
   };
   r.queue = r.queue.concat([{ id: id, fromConnId: connId, order: stamped, status: 'pending', ts: Date.now() }]);
   return { room: r, orderId: id };
+}
+
+// The host trades from their own seat. Because the host IS the authority,
+// their orders don't queue for approval — they apply immediately. Still stamped
+// from the trusted membership, and still validated by the engine.
+function applyHostOrder(room, connId, order) {
+  if (!room.started) return fail(room, 'The game has not started yet');
+  var member = room.members[connId];
+  if (!member || typeof member.playerIdx !== 'number') return fail(room, 'Take a seat before trading');
+  var stamped = {
+    playerIdx: member.playerIdx,
+    stockId: order.stockId,
+    action: order.action,
+    qty: order.qty,
+    margin: !!order.margin,
+  };
+  var res = engine.applyTrade(room.game, stamped);
+  if (res.error) return fail(room, res.error);
+  var r = clone(room);
+  r.game = res.state;
+  return { room: r, txn: res.txn };
 }
 
 function approveOrder(room, orderId) {
@@ -177,6 +201,7 @@ var ROOM = {
   addPlayer: addPlayer,
   startGame: startGame,
   queueOrder: queueOrder,
+  applyHostOrder: applyHostOrder,
   approveOrder: approveOrder,
   rejectOrder: rejectOrder,
   advance: advance,

@@ -129,10 +129,17 @@ class Component extends DCLogic {
 
   // The URL a player scans/opens to join. P2P has no server address to encode —
   // the room code alone is the rendezvous (peers meet over the BitTorrent DHT).
+  // Built from the host's live browser URL so it works wherever the page is
+  // actually served (localhost, a GitHub Pages sub-path, a custom domain, …).
   joinUrl() {
-    let base = '';
-    try { base = location.origin + location.pathname; } catch (e) { base = ''; }
-    return base + '?room=' + encodeURIComponent(this.state.roomCode);
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set('room', this.state.roomCode);
+      u.hash = '';
+      return u.toString();
+    } catch (e) {
+      return '?room=' + encodeURIComponent(this.state.roomCode);
+    }
   }
 
   makeQR(text) {
@@ -199,6 +206,14 @@ class Component extends DCLogic {
       };
       if (v.role === 'host') {
         patch.phase = v.started ? 'market' : 'lobby';
+        // The host can also take a seat and trade. Once seated, drive the
+        // portfolio + trade panel from the host's own player index.
+        if (v.you && typeof v.you.playerIdx === 'number') {
+          patch.you = v.you;
+          patch.activePlayer = v.you.playerIdx;
+          patch.tradePlayerIdx = v.you.playerIdx;
+          if (!this.state.stocks.length && v.game.stocks[0]) patch.tradeStockId = v.game.stocks[0].id;
+        }
       } else if (v.role === 'player') {
         patch.you = v.you;
         patch.activePlayer = (typeof v.you.playerIdx === 'number') ? v.you.playerIdx : 0;
@@ -279,6 +294,16 @@ class Component extends DCLogic {
   }
 
   executeTrade() {
+    // Host online: route through the P2P layer as an instant-fill order (the
+    // host stamps their own seat server-side); no local mutation.
+    if (this.state.netRole === 'host') {
+      const { tradeStockId, tradeAction, tradeQty, tradeMargin } = this.state;
+      const q = parseInt(tradeQty, 10);
+      if (!q || q <= 0) { this.showToast('Enter a quantity', 'error'); return; }
+      if (this.conn) this.conn.send({ type: 'order', order: { stockId: tradeStockId, action: tradeAction, qty: q, margin: tradeMargin } });
+      this.setState({ tradeQty: '' });
+      return;
+    }
     const E = this.eng();
     const { tradePlayerIdx, tradeStockId, tradeAction, tradeQty, tradeMargin } = this.state;
     const res = E.applyTrade(this.engineState(), { playerIdx: tradePlayerIdx, stockId: tradeStockId, action: tradeAction, qty: tradeQty, margin: tradeMargin });
@@ -289,6 +314,14 @@ class Component extends DCLogic {
   }
 
   repayLoan() {
+    // Host online: repay the host's own seat through the P2P layer (instant).
+    if (this.state.netRole === 'host') {
+      const hi = (this.state.you && typeof this.state.you.playerIdx === 'number') ? this.state.you.playerIdx : this.state.activePlayer;
+      const hp = this.state.players[hi];
+      if (!hp || !hp.loan) { this.showToast('No loan to repay', 'error'); return; }
+      if (this.conn) this.conn.send({ type: 'order', order: { action: 'repay', qty: hp.loan } });
+      return;
+    }
     const E = this.eng();
     const idx = this.state.activePlayer;
     const p = this.state.players[idx];
@@ -429,6 +462,7 @@ class Component extends DCLogic {
     // ── Online multiplayer (#8) ──
     const netRole = s.netRole;
     const isHostOnline = netRole === 'host';
+    const hostSeated = isHostOnline && !!(s.you && typeof s.you.playerIdx === 'number');
     const connColor = s.connStatus === 'connected' ? G : (s.connStatus === 'reconnecting' ? Y : '#8b949e');
 
     const orderLabel = (o) => {
@@ -473,7 +507,15 @@ class Component extends DCLogic {
       isJoinName: phase === 'joinName',
       isWaiting: phase === 'waiting',
       isHostOnline,
-      showTradePanel: netRole === 'local',
+      // The trade panel shows in local pass-and-play and for a seated host.
+      // The player picker and tab bar are local-only — a host trades only their
+      // own seat, and guests get their own phone view.
+      showTradePanel: netRole === 'local' || (hostSeated && !!s.started),
+      showTradePlayerSelect: netRole === 'local',
+      showPlayerTabs: netRole === 'local',
+      hostCanSeat: isHostOnline && !hostSeated,
+      hostSeated,
+      hostSeatName: (s.you && s.you.name) ? s.you.name : '',
       roomCode: s.roomCode,
       connStatus: s.connStatus || 'connecting',
       connColor,

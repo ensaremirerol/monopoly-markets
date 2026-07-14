@@ -128,9 +128,17 @@
               break;
             }
             case 'order': {
-              var or = R.queueOrder(requireRoom(), connId, msg.order || {});
-              if (or.error) return err(connId, or.error);
-              game = or.room;
+              // The host trades from their own seat and, being the authority,
+              // their orders fill immediately; guests' orders queue for approval.
+              if (isHost(connId)) {
+                var hr = R.applyHostOrder(requireRoom(), connId, msg.order || {});
+                if (hr.error) return err(connId, hr.error);
+                game = hr.room;
+              } else {
+                var or = R.queueOrder(requireRoom(), connId, msg.order || {});
+                if (or.error) return err(connId, or.error);
+                game = or.room;
+              }
               break;
             }
             case 'approve': {
