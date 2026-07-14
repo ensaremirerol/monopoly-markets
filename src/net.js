@@ -178,7 +178,7 @@
     function startGuest() {
       whenTrystero(function () {
         if (closed) return;
-        mplog('guest: joining P2P room, searching for host over DHT…');
+        mplog('guest: joining P2P room, searching for host via relays…');
         var gotState = false;
         transport = window.GameP2P.joinAsPlayer({
           roomId: roomId,
@@ -193,7 +193,7 @@
         flushOutbox(function (m) { transport.send(m); });
         // If no peer shows up, say so — this is the "same-Wi-Fi still fails" case.
         setTimeout(function () {
-          if (!closed && !gotState) mplog('guest: still no host after 15s — host tab open on this room? trackers reachable?');
+          if (!closed && !gotState) mplog('guest: still no host after 15s — host tab open on this room? relays reachable?');
         }, 15000);
       }, fail);
     }

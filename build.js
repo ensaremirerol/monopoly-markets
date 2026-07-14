@@ -31,9 +31,14 @@ const qrcode = fs.readFileSync(path.join(root, 'src/qrcode.js'), 'utf8').trim();
 // Trystero (P2P transport dependency) is loaded from jsDelivr as a self-contained
 // ES module and exposed on window.trystero. See src/game-p2p.js for why this exact
 // URL (0.21.1 /torrent/+esm) rather than the classic <script> the spec suggested.
+// Discovery strategy: nostr (not torrent). The WebTorrent trackers the torrent
+// strategy uses are flaky and iOS Safari often can't complete the WebSocket
+// handshake to them, so a phone would join the room but never find the host.
+// Nostr relays are plain TLS WebSockets to well-known hosts — Safari-friendly
+// and far more reliable for rendezvous. Same joinRoom/selfId API.
 const TRYSTERO_TAG =
   '<script type="module" id="trystero-cdn">\n' +
-  "import { joinRoom, selfId } from 'https://cdn.jsdelivr.net/npm/trystero@0.21.1/torrent/+esm';\n" +
+  "import { joinRoom, selfId } from 'https://cdn.jsdelivr.net/npm/trystero@0.21.1/nostr/+esm';\n" +
   'window.trystero = { joinRoom: joinRoom, selfId: selfId };\n' +
   "window.dispatchEvent(new Event('trystero-ready'));\n" +
   '</script>\n';

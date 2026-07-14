@@ -128,7 +128,7 @@ class Component extends DCLogic {
   }
 
   // The URL a player scans/opens to join. P2P has no server address to encode —
-  // the room code alone is the rendezvous (peers meet over the BitTorrent DHT).
+  // the room code alone is the rendezvous (peers meet over public Nostr relays).
   // Built from the host's live browser URL so it works wherever the page is
   // actually served (localhost, a GitHub Pages sub-path, a custom domain, …).
   joinUrl() {

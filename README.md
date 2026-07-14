@@ -110,12 +110,13 @@ rules there, not in the bundle.
 Players join one game from their own phones, watch the market live, and **queue
 orders the host approves** — nothing is filled automatically. It uses a
 host-authoritative model over **peer-to-peer WebRTC** ([Trystero](https://github.com/dmotz/trystero),
-torrent strategy): **there is no server.** The player who clicks *Host* holds
+nostr strategy for signaling): **there is no server.** The player who clicks *Host* holds
 the only copy of the game state — in their own browser tab — and runs the
 `src/room.js` reducers over the same `src/engine.js` rules; guests only
-*propose*. Peers find each other through the public BitTorrent DHT, then talk
-directly browser-to-browser. No backend, no accounts, no API keys, no hosting
-cost — it runs from plain GitHub Pages.
+*propose*. Peers find each other through public Nostr relays (used only for the
+initial handshake), then talk directly browser-to-browser over WebRTC. No
+backend, no accounts, no API keys, no hosting cost — it runs from plain GitHub
+Pages.
 
 **The flow** (Kahoot-style — no need to pre-enter players)
 
@@ -150,7 +151,7 @@ python3 -m http.server 8000      # then open http://localhost:8000
 
 **Testing two players locally.** Open the page in one tab and click **HOST
 ONLINE** (that tab is the authority). Open a second tab, add `?room=<CODE>` from
-the lobby's QR/code, and it joins as a guest. Peer discovery over the DHT
+the lobby's QR/code, and it joins as a guest. Peer discovery over the relays
 takes ~1–3 s.
 
 **Phones / cellular need TURN.** WebRTC first tries a direct connection using

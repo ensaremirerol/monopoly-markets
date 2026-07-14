@@ -2,17 +2,20 @@
 // ============================================================================
 // game-p2p.js — serverless host-authority transport via Trystero + WebRTC.
 // ----------------------------------------------------------------------------
-// No backend. Peers find each other through the public BitTorrent DHT (via
-// Trystero's torrent strategy) and then talk directly, browser-to-browser,
-// over WebRTC data channels. Works from a plain static host (GitHub Pages) —
-// no server, no API key, no build step for the dependency itself.
+// No backend. Peers find each other through public Nostr relays (Trystero's
+// nostr strategy — used only for signaling/rendezvous) and then talk directly,
+// browser-to-browser, over WebRTC data channels. Works from a plain static host
+// (GitHub Pages) — no server, no API key, no build step for the dependency.
 //
 // Trystero is loaded as an ES module (see index.html) and exposed on
 // `window.trystero`. NOTE: the version pinned in the original spec
 // (@0.21/dist/torrent.js as a classic <script>) does not exist — modern
-// Trystero ships ESM only, and 0.25+ removed the bundled torrent strategy.
-// We load `trystero@0.21.1/torrent/+esm` (jsDelivr's self-contained bundle),
-// which still exports { joinRoom, selfId }.
+// Trystero ships ESM only, and 0.25+ removed the bundled strategies. We load
+// `trystero@0.21.1/nostr/+esm` (jsDelivr's self-contained bundle), which
+// exports { joinRoom, selfId }. We use nostr rather than the torrent strategy
+// because the WebTorrent trackers are flaky and iOS Safari can't reliably reach
+// them (peers join but never find each other); nostr relays are Safari-friendly
+// plain-TLS WebSockets.
 //
 // This layer is deliberately thin: it does raw message passing, peer join /
 // leave, and per-peer targeted sends. The host-authority game protocol
@@ -46,6 +49,18 @@
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   ];
 
+  // Pinned Nostr relays for rendezvous. We pin an explicit, small set of big,
+  // well-maintained relays (rather than trusting Trystero's rotating defaults)
+  // and set relayRedundancy to the full count so EVERY peer announces on EVERY
+  // relay — that guarantees the host and a guest share a relay and can find each
+  // other. Override with window.TRYSTERO_RELAYS if these ever misbehave.
+  var DEFAULT_RELAYS = [
+    'wss://relay.damus.io',
+    'wss://nos.lol',
+    'wss://relay.primal.net',
+    'wss://relay.snort.social',
+  ];
+
   function trystero() {
     return (typeof window !== 'undefined' && window.trystero) || null;
   }
@@ -56,7 +71,14 @@
   function roomConfig() {
     var turn = (typeof window !== 'undefined' && Array.isArray(window.TRYSTERO_TURN))
       ? window.TRYSTERO_TURN : DEFAULT_TURN;
-    var cfg = { appId: APP_ID, turnConfig: turn };
+    var relays = (typeof window !== 'undefined' && Array.isArray(window.TRYSTERO_RELAYS))
+      ? window.TRYSTERO_RELAYS : DEFAULT_RELAYS;
+    var cfg = {
+      appId: APP_ID,
+      relayUrls: relays,
+      relayRedundancy: relays.length,
+      turnConfig: turn,
+    };
     if (typeof window !== 'undefined' && window.TRYSTERO_RTC_CONFIG) cfg.rtcConfig = window.TRYSTERO_RTC_CONFIG;
     return cfg;
   }
