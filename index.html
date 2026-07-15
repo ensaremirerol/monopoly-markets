@@ -277,6 +277,10 @@ document.addEventListener('DOMContentLoaded', async function() {
 (function () {
   var lines = [];
   var shown = false;
+  // Hard gate: the overlay is NEVER visible unless the URL has ?debug, even on
+  // errors or slow-load timeouts. Normal players just see the game.
+  var debugEnabled = false;
+  try { debugEnabled = new URLSearchParams(location.search).has('debug'); } catch (e) { /* ignore */ }
 
   function panel() {
     var el = document.getElementById('mp-diag');
@@ -295,7 +299,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     return el;
   }
 
-  function render() { try { panel().textContent = lines.join('\n'); } catch (e) { /* pre-DOM */ } }
+  function render() {
+    if (!debugEnabled) return;               // never touch the DOM for normal players
+    try { panel().textContent = lines.join('\n'); } catch (e) { /* pre-DOM */ }
+  }
 
   function stamp() {
     try { return new Date().toTimeString().slice(0, 8); } catch (e) { return ''; }
@@ -306,14 +313,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (lines.length > 200) lines.shift();
     render();
   };
-  window.MPDIAG_SHOW = function () { shown = true; try { panel().style.display = 'block'; } catch (e) { } };
+  window.MPDIAG_SHOW = function () {
+    if (!debugEnabled) return;               // no-op for normal players
+    shown = true;
+    try { panel().style.display = 'block'; } catch (e) { }
+  };
 
-  // Only surface for an explicit ?debug — ordinary players never see it. It
-  // still force-shows itself on any error (see handlers below), so a broken
-  // join is never silent.
-  try {
-    if (new URLSearchParams(location.search).has('debug')) window.MPDIAG_SHOW();
-  } catch (e) { /* ignore */ }
+  if (debugEnabled) window.MPDIAG_SHOW();
 
   window.addEventListener('error', function (e) {
     var m = (e && (e.message || (e.error && e.error.message))) || 'error';
