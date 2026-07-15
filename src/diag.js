@@ -57,6 +57,38 @@
     window.MPDIAG_SHOW();
   });
 
+  // Wrap RTCPeerConnection to watch the actual WebRTC handshake. This runs at
+  // load, before Trystero creates any connection (that happens on a click), so
+  // every peer connection is instrumented. ICE "checking → failed" is the
+  // signature of a NAT that STUN can't traverse (needs TURN); a jump to
+  // "connected" means the data path is up.
+  try {
+    var OrigPC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    if (OrigPC && !OrigPC.__mpWrapped) {
+      var Wrapped = function (cfg) {
+        var pc = new OrigPC(cfg);
+        try {
+          var ice = (cfg && cfg.iceServers) || [];
+          var hasTurn = ice.some(function (s) {
+            return [].concat(s.urls || []).some(function (u) { return /^turns?:/i.test(u); });
+          });
+          window.MPLOG('RTCPeerConnection · iceServers=' + ice.length + ' · TURN=' + hasTurn);
+          pc.addEventListener('iceconnectionstatechange', function () {
+            window.MPLOG('ICE: ' + pc.iceConnectionState);
+            if (pc.iceConnectionState === 'failed') {
+              window.MPLOG('→ WebRTC could not connect. This is symmetric-NAT (cellular): a working TURN relay is required.');
+              window.MPDIAG_SHOW();
+            }
+          });
+        } catch (e) { /* ignore */ }
+        return pc;
+      };
+      Wrapped.prototype = OrigPC.prototype;
+      Wrapped.__mpWrapped = true;
+      window.RTCPeerConnection = Wrapped;
+    }
+  } catch (e) { /* ignore */ }
+
   window.MPLOG('boot · ' + navigator.userAgent);
   window.MPLOG('secureContext=' + window.isSecureContext +
     ' · RTCPeerConnection=' + (typeof RTCPeerConnection !== 'undefined') +
