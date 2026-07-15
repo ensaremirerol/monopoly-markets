@@ -76,7 +76,9 @@
         <div style="display:inline-block; padding:14px; background:#fff; border-radius:14px;">{{ qrSvg }}</div>
         <div style="margin-top:18px; color:#484f58; font:12px Inter,system-ui;">or go to the game URL and enter code</div>
         <div style="margin-top:8px; font:800 40px 'JetBrains Mono',monospace; color:#58a6ff; letter-spacing:8px;">{{ roomCode }}</div>
-        <div style="margin-top:6px; font:11px Inter,system-ui; color:{{ connColor }};">● {{ connStatus }}</div>
+        <button onclick="{{ onCopyLink }}" style="margin-top:14px; padding:0 18px; height:40px; background:#161b22; border:1px solid #30363d; border-radius:8px; color:#e6edf3; font:700 13px Inter,system-ui; cursor:pointer; display:inline-flex; align-items:center; gap:7px;">🔗 Copy join link</button>
+        <div style="margin-top:6px; color:#30363d; font:10px 'JetBrains Mono',monospace; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ joinUrlText }}</div>
+        <div style="margin-top:8px; font:11px Inter,system-ui; color:{{ connColor }};">● {{ connStatus }}</div>
       </div>
 
       <!-- Roster + start -->

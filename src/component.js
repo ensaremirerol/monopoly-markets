@@ -142,6 +142,38 @@ class Component extends DCLogic {
     }
   }
 
+  copyJoinLink() {
+    const url = this.joinUrl();
+    const done = () => this.showToast('Join link copied', 'success');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done, () => this.fallbackCopy(url, done));
+      } else {
+        this.fallbackCopy(url, done);
+      }
+    } catch (e) { this.fallbackCopy(url, done); }
+  }
+
+  // Clipboard API needs a secure context and isn't everywhere on mobile;
+  // fall back to a hidden textarea + execCommand.
+  fallbackCopy(text, done) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok ? done() : this.showToast('Copy failed — share the room code', 'error');
+    } catch (e) { this.showToast('Copy failed — share the room code', 'error'); }
+  }
+
   makeQR(text) {
     if (!window.qrcode || !text) return null;
     let qr;
@@ -524,6 +556,7 @@ class Component extends DCLogic {
       lobbyRows, lobbyCount: lobbyRows.length, hasLobby: lobbyRows.length > 0, noLobby: lobbyRows.length === 0,
       qrSvg: phase === 'lobby' ? this.makeQR(this.joinUrl()) : null,
       joinUrlText: phase === 'lobby' ? this.joinUrl() : '',
+      onCopyLink: () => this.copyJoinLink(),
       onStartGame: () => this.startGame(),
       startDisabled: lobbyRows.length < 2,
       startHint: lobbyRows.length < 2 ? 'Waiting for at least 2 players…' : 'Players keep their phones — you approve their trades here.',
