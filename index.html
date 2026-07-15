@@ -270,9 +270,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 // ----------------------------------------------------------------------------
 // Phones can't easily open a dev console, so we print connection milestones and
 // uncaught errors onto the page. net.js calls window.MPLOG(...) at each step.
-// The panel shows automatically when the URL carries ?room= (a guest joining)
-// or ?debug, and forces itself visible on any error. It lives on <html> so the
-// app rebuilding <body> can't remove it.
+// The panel is hidden for normal players and only shows when the URL carries
+// ?debug — or forces itself visible on any uncaught error. It lives on <html>
+// so the app rebuilding <body> can't remove it.
 // ============================================================================
 (function () {
   var lines = [];
@@ -308,9 +308,11 @@ document.addEventListener('DOMContentLoaded', async function() {
   };
   window.MPDIAG_SHOW = function () { shown = true; try { panel().style.display = 'block'; } catch (e) { } };
 
+  // Only surface for an explicit ?debug — ordinary players never see it. It
+  // still force-shows itself on any error (see handlers below), so a broken
+  // join is never silent.
   try {
-    var qs = new URLSearchParams(location.search);
-    if (qs.has('debug') || qs.has('room')) window.MPDIAG_SHOW();
+    if (new URLSearchParams(location.search).has('debug')) window.MPDIAG_SHOW();
   } catch (e) { /* ignore */ }
 
   window.addEventListener('error', function (e) {
